@@ -329,7 +329,7 @@ class SalarySlip(TransactionBase):
 			struct = self.check_sal_struct()
 
 			if struct:
-				self._salary_structure_doc = frappe.get_cached_doc("Salary Structure", struct)
+				self.set_salary_structure_doc()
 				self.salary_slip_based_on_timesheet = (
 					self._salary_structure_doc.salary_slip_based_on_timesheet or 0
 				)
@@ -813,12 +813,11 @@ class SalarySlip(TransactionBase):
 		other_component_type = "deductions" if component_type == "earnings" else "earnings"
 
 		for d in self._salary_structure_doc.get(component_type):
-			if not d.amount_based_on_formula:
-				continue
-			for var in get_variables_from_formula(d.formula):
-				if is_var_updated(var):
-					self.add_structure_component(d, component_type)
-					self.update_dependent_components_recursively(other_component_type, d.abbr)
+			if d.amount_based_on_formula and d.formula:
+				for var in get_variables_from_formula(d.formula):
+					if is_var_updated(var):
+						self.add_structure_component(d, component_type)
+						self.update_dependent_components_recursively(other_component_type, d.abbr)
 
 	def set_net_pay(self):
 		self.total_deduction = self.get_component_totals("deductions")
@@ -2350,4 +2349,6 @@ def email_salary_slips(names) -> None:
 
 
 def get_variables_from_formula(formula: str) -> list[str]:
+	# compile expects a string
+	formula = cstr(formula)
 	return [node.id for node in ast.walk(ast.parse(formula, mode="eval")) if isinstance(node, ast.Name)]
