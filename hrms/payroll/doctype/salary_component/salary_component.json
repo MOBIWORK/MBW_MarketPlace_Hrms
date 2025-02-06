@@ -67,7 +67,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Type",
-   "options": "Earning\nDeduction",
+   "options": "Earning\nDeduction\nOther",
    "reqd": 1
   },
   {
