@@ -340,7 +340,14 @@ class PayrollEntry(Document):
 					ss.salary_structure,
 					ss.employee,
 				)
-				.where((ssd.parentfield == component_type) & (ss.name.isin([d.name for d in salary_slips])))
+				.where(
+					(ssd.parentfield == component_type)
+					& (ss.name.isin([d.name for d in salary_slips]))
+					& (
+						(ssd.do_not_include_in_total == 0)
+						| ((ssd.do_not_include_in_total == 1) & (ssd.do_not_include_in_accounts == 0))
+					)
+				)
 			).run(as_dict=True)
 
 			return salary_components
@@ -585,6 +592,8 @@ class PayrollEntry(Document):
 				employee_wise_accounting_enabled,
 			)
 
+			# when party is not required, skip the validation in journal & gl entry
+			frappe.flags.party_not_required_for_receivable_payable = True
 			self.make_journal_entry(
 				accounts,
 				currencies,
@@ -596,6 +605,7 @@ class PayrollEntry(Document):
 				submit_journal_entry=True,
 				submitted_salary_slips=submitted_salary_slips,
 			)
+			frappe.flags.party_not_required_for_receivable_payable = False
 
 	def make_journal_entry(
 		self,
@@ -833,6 +843,9 @@ class PayrollEntry(Document):
 		if account_currency not in currencies:
 			currencies.append(account_currency)
 
+		if company_currency not in currencies:
+			currencies.append(company_currency)
+
 		if account_currency == company_currency:
 			conversion_rate = self.exchange_rate
 			exchange_rate = 1
@@ -961,6 +974,13 @@ class PayrollEntry(Document):
 				& (SalarySlip.start_date >= self.start_date)
 				& (SalarySlip.end_date <= self.end_date)
 				& (SalarySlip.payroll_entry == self.name)
+				& (
+					(SalaryDetail.do_not_include_in_total == 0)
+					| (
+						(SalaryDetail.do_not_include_in_total == 1)
+						& (SalaryDetail.do_not_include_in_accounts == 0)
+					)
+				)
 			)
 		)
 
