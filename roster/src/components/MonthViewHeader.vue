@@ -14,7 +14,7 @@
 			<div v-for="[key, value] of Object.entries(filters)" :key="key" class="w-40">
 				<FormControl
 					type="autocomplete"
-					:placeholder="toTitleCase(key)"
+					:placeholder="filterPlaceholder(key as FilterField)"
 					:options="value.options"
 					v-model="value.model"
 					:disabled="!value.options.length"
@@ -37,6 +37,8 @@ export type FilterField =
 	| "department"
 	| "branch"
 	| "designation"
+	| "custom_postal_territory"
+	| "custom_postal_profile"
 	| "shift_type"
 	| "shift_location";
 
@@ -49,9 +51,11 @@ const emit = defineEmits<{
 	(e: "updateFilters", newFilters: { [K in FilterField]: string }): void;
 }>();
 
+type TerritoryOptionRow = { name: string; postal_territory?: string };
+
 const filters: {
 	[K in FilterField]: {
-		options: string[];
+		options: (string | { label: string; value: string })[];
 		model?: { value: string } | null;
 	};
 } = reactive({
@@ -59,6 +63,8 @@ const filters: {
 	department: { options: [], model: null },
 	branch: { options: [], model: null },
 	designation: { options: [], model: null },
+	custom_postal_territory: { options: [], model: null },
+	custom_postal_profile: { options: [], model: null },
 	shift_type: { options: [], model: null },
 	shift_location: { options: [], model: null },
 });
@@ -66,10 +72,17 @@ const filters: {
 watch(
 	() => filters.company.model,
 	(val) => {
-		if (val?.value) getFilterOptions("department", { company: val.value });
-		else {
+		if (val?.value) {
+			getFilterOptions("department", { company: val.value });
+			getFilterOptions("custom_postal_territory", { company: val.value });
+			getFilterOptions("custom_postal_profile", { company: val.value });
+		} else {
 			filters.department.model = null;
 			filters.department.options = [];
+			filters.custom_postal_territory.model = null;
+			filters.custom_postal_territory.options = [];
+			filters.custom_postal_profile.model = null;
+			filters.custom_postal_profile.options = [];
 		}
 	},
 );
@@ -80,6 +93,8 @@ watch(filters, (val) => {
 		department: val.department.model?.value || "",
 		branch: val.branch.model?.value || "",
 		designation: val.designation.model?.value || "",
+		custom_postal_territory: val.custom_postal_territory.model?.value || "",
+		custom_postal_profile: val.custom_postal_profile.model?.value || "",
 		shift_type: val.shift_type.model?.value || "",
 		shift_location: val.shift_location.model?.value || "",
 	};
@@ -91,6 +106,28 @@ const toTitleCase = (str: string) =>
 		.split("_")
 		.map((s) => s.charAt(0).toUpperCase() + s.slice(1))
 		.join(" ");
+
+const filterPlaceholder = (field: FilterField): string => {
+	switch (field) {
+		case "custom_postal_territory":
+			return "Postal Territory";
+		case "custom_postal_profile":
+			return "POS Profile";
+		default:
+			return toTitleCase(field);
+	}
+};
+
+const optionsDoctype = (field: FilterField): string => {
+	switch (field) {
+		case "custom_postal_territory":
+			return "Postal Territory";
+		case "custom_postal_profile":
+			return "POS Profile";
+		default:
+			return toTitleCase(field);
+	}
+};
 
 // RESOURCES
 
@@ -104,17 +141,24 @@ const defaultCompany = createResource({
 	},
 });
 
+const territoryFilterOptions = (rows: TerritoryOptionRow[]) =>
+	rows.map((item) => ({
+		label: item.postal_territory?.trim() || item.name,
+		value: item.name,
+	}));
+
 const getFilterOptions = (field: FilterField, listFilters: { company?: string } = {}) => {
+	const isPostalTerritory = field === "custom_postal_territory";
 	createListResource({
-		doctype: toTitleCase(field),
-		fields: ["name"],
+		doctype: optionsDoctype(field),
+		fields: isPostalTerritory ? ["name", "postal_territory"] : ["name"],
 		filters: listFilters,
 		pageLength: 100,
 		auto: true,
-		onSuccess: (data: { name: string }[]) => {
+		onSuccess: (data: TerritoryOptionRow[]) => {
 			const value = field === "company" ? defaultCompany.data : "";
 			filters[field].model = { value };
-			filters[field].options = data.map((item) => item.name);
+			filters[field].options = isPostalTerritory ? territoryFilterOptions(data) : data.map((item) => item.name);
 		},
 		onError(error: { messages: string[] }) {
 			raiseToast("error", error.messages[0]);
