@@ -61,6 +61,9 @@ class ExpenseClaim(AccountsController, PWANotificationsMixin):
 		if self.task and not self.project:
 			self.project = frappe.db.get_value("Task", self.task, "project")
 
+		if flt(self.grand_total) > 0 and self.total_advance_amount:
+			self.is_paid = 0
+
 	def set_status(self, update=False):
 		status = {"0": "Draft", "1": "Submitted", "2": "Cancelled"}[cstr(self.docstatus or 0)]
 
@@ -565,6 +568,8 @@ def get_expense_claim_account(expense_claim_type, company):
 
 @frappe.whitelist()
 def get_advances(employee: str, advance_id: str | None = None):
+	frappe.has_permission("Employee", "read", employee, throw=True)
+
 	advance = frappe.qb.DocType("Employee Advance")
 
 	query = frappe.qb.from_(advance).select(
